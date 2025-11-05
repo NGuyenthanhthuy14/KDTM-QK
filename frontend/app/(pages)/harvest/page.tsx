@@ -2,10 +2,11 @@
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, Leaf, Cloud, Activity, NotebookPen } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useRouter } from "next/navigation";
 
 export default function CropManager() {
   const [crops, setCrops] = useState([]);
-
+	const router = useRouter();
   const [selectedCrop, setSelectedCrop] = useState(crops[0]);
   const [logs, setLogs] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,7 +27,8 @@ export default function CropManager() {
 	}, []);
 
   // --- Tính tiến độ dựa trên ngày gieo và thu hoạch ---
-  const calculateProgress = (crop) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const calculateProgress = (crop : any) => {
     if (!crop.startDate || !crop.expectedHarvest) return 0;
     const start = new Date(crop.startDate).getTime();
     const end = new Date(crop.expectedHarvest).getTime();
@@ -36,7 +38,8 @@ export default function CropManager() {
     return Math.round(((now - start) / (end - start)) * 100);
   };
 
-  const updateStatusByProgress = (progress) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updateStatusByProgress = (progress: any) => {
     if (progress === 0) return "Chưa gieo";
     if (progress < 25) return "Mới gieo";
     if (progress < 50) return "Sinh trưởng sớm";
@@ -65,6 +68,18 @@ export default function CropManager() {
     }
   };
 
+	// Hàm định dạng ngày theo kiểu Việt Nam
+	const formatDate = (dateStr) => {
+		if (!dateStr) return "—";
+		const date = new Date(dateStr);
+		return date.toLocaleDateString("vi-VN", {
+			weekday: "short", // Thứ 2, Thứ 3
+			day: "2-digit",
+			month: "2-digit",
+			year: "numeric"
+		});
+	};
+
   // --- Cập nhật tiến độ & trạng thái mỗi phút ---
   useEffect(() => {
     const updateAllProgress = () => {
@@ -78,7 +93,7 @@ export default function CropManager() {
     updateAllProgress();
     const interval = setInterval(updateAllProgress, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedCrop]);
 
   // --- Cập nhật thời tiết cho cây chọn ---
   useEffect(() => {
@@ -103,15 +118,47 @@ export default function CropManager() {
 
   // --- Popup chỉnh sửa ---
   const openEditModal = (crop) => { setEditData({ ...crop }); setIsModalOpen(true); };
-  const saveEdit = () => { setCrops(prev => prev.map(c => c.id === editData.id ? { ...editData } : c)); setSelectedCrop(editData); setIsModalOpen(false); };
+	console.log (editData)
+	const saveEdit = async () => {
+		try {
+			// Gửi dữ liệu cập nhật lên server
+			const res = await fetch(`http://localhost:3003/crop/${editData._id}`, {
+				method: "PUT", // hoặc PATCH nếu backend dùng PATCH
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(editData)
+			});
+			if (!res.ok) throw new Error("Lỗi cập nhật dữ liệu");
+
+			const updatedCrop = await res.json();
+
+			// Cập nhật state frontend
+			setCrops(prev => prev.map(c => c._id === updatedCrop._id ? updatedCrop : c));
+			setSelectedCrop(updatedCrop);
+			setIsModalOpen(false);
+
+		} catch (err) {
+			console.error("Lỗi khi lưu cây:", err);
+			alert("Không thể lưu cây trồng. Xem console để biết lỗi.");
+		}
+	};
 
   // --- Xóa cây ---
-  const deleteCrop = (id) => {
-    if (!confirm("Xóa cây trồng này?")) return;
-    const newList = crops.filter(c => c.id !== id);
-    setCrops(newList);
-    setSelectedCrop(newList[0] || null);
-  };
+	const deleteCrop = async (_id) => {
+		if (!confirm("Xóa cây trồng này?")) return;
+		try {
+			const res = await fetch(`http://localhost:3003/crop/${_id}`, { method: 'DELETE' });
+			if (!res.ok) throw new Error("Xóa thất bại");
+			
+			// Cập nhật state frontend
+			const newList = crops.filter(c => c._id !== _id);
+			setCrops(newList);
+			setSelectedCrop(newList[0] || null);
+		} catch (err) {
+			console.error(err);
+			alert("Không thể xóa cây trồng. Xem console để biết lỗi.");
+		}
+	};
+
 
   // --- Biểu đồ năng suất ---
   const yieldData = [
@@ -122,22 +169,19 @@ export default function CropManager() {
     { month: "Tháng 5", yield: selectedCrop?.yieldPredicted || 6 },
   ];
 
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Danh sách cây trồng */}
       <div className="w-1/3 bg-white border-r border-gray-200 p-4 flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-green-700">🌿 Danh sách cây trồng</h2>
-          <button
-            onClick={() => {
-              const name = prompt("Tên cây trồng:");
-              if (!name) return;
-              const newCrop = { id: Date.now(), name, scientificName: "", startDate: "", expectedHarvest: "", note: "", status: "Chưa trồng", growthStage: "", progress: 0 };
-              setCrops([...crops, newCrop]);
-              setSelectedCrop(newCrop);
-            }}
-            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg"
-          ><Plus size={16}/> Thêm</button>
+					<button
+						onClick={() => router.push("/harvest/add")}
+						className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg"
+					>
+						<Plus size={16}/> Thêm
+					</button>
         </div>
         <ul className="space-y-2 overflow-y-auto">
           {crops.map((crop, index) => (
@@ -158,8 +202,8 @@ export default function CropManager() {
               <h2 className="text-2xl font-bold text-green-700 mb-1">{selectedCrop.name}</h2>
               <p className="text-gray-500 italic mb-3">{selectedCrop.scientificName || "Chưa có tên khoa học"}</p>
               <div className="grid md:grid-cols-2 gap-4 mb-4">
-                <div><p className="text-sm text-gray-500">🌱 Ngày gieo</p><p>{selectedCrop.startDate || "—"}</p></div>
-                <div><p className="text-sm text-gray-500">🌾 Dự kiến thu hoạch</p><p>{selectedCrop.expectedHarvest || "—"}</p></div>
+                <div><p className="text-sm text-gray-500">🌱 Ngày gieo</p><p>{formatDate(selectedCrop.startDate) || "—"}</p></div>
+                <div><p className="text-sm text-gray-500">🌾 Dự kiến thu hoạch</p><p>{formatDate(selectedCrop.expectedHarvest) || "—"}</p></div>
                 <div><p className="text-sm text-gray-500">📊 Trạng thái</p><p>{selectedCrop.status}</p></div>
                 <div><p className="text-sm text-gray-500">🌿 Giai đoạn</p><p>{selectedCrop.growthStage || "—"}</p></div>
               </div>
@@ -207,7 +251,7 @@ export default function CropManager() {
 
             <div className="flex justify-end gap-2">
               <button onClick={() => openEditModal(selectedCrop)} className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg"><Pencil size={16}/> Cập nhật</button>
-              <button onClick={() => deleteCrop(selectedCrop.id)} className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg"><Trash2 size={16}/> Xóa</button>
+              <button onClick={() => deleteCrop(selectedCrop._id)} className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg"><Trash2 size={16}/> Xóa</button>
             </div>
           </div>
         ) : (
@@ -215,29 +259,29 @@ export default function CropManager() {
         )}
       </div>
 
-      {/* Popup chỉnh sửa cây */}
       {isModalOpen && selectedCrop && (
-        <div className="fixed inset-0 bg-gray-5000 bg-opacity-40 flex justify-center items-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl p-6 w-96 shadow-lg relative">
-            <button className="absolute top-3 right-3 text-gray-500 hover:text-gray-700" onClick={() => setIsModalOpen(false)}>✖</button>
-            <h2 className="text-xl font-bold text-green-700 mb-4">Cập nhật cây trồng</h2>
-            <div className="space-y-3">
-              <input className="w-full border rounded px-3 py-1" placeholder="Tên cây" value={editData.name || ""} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
-              <input className="w-full border rounded px-3 py-1" placeholder="Tên khoa học" value={editData.scientificName || ""} onChange={(e) => setEditData({ ...editData, scientificName: e.target.value })} />
-              <input className="w-full border rounded px-3 py-1" type="date" placeholder="Ngày gieo" value={editData.startDate || ""} onChange={(e) => setEditData({ ...editData, startDate: e.target.value })} />
-              <input className="w-full border rounded px-3 py-1" type="date" placeholder="Dự kiến thu hoạch" value={editData.expectedHarvest || ""} onChange={(e) => setEditData({ ...editData, expectedHarvest: e.target.value })} />
-              <input className="w-full border rounded px-3 py-1" placeholder="Trạng thái" value={editData.status || ""} onChange={(e) => setEditData({ ...editData, status: e.target.value })} />
-              <input className="w-full border rounded px-3 py-1" placeholder="Giai đoạn phát triển" value={editData.growthStage || ""} onChange={(e) => setEditData({ ...editData, growthStage: e.target.value })} />
-              <input className="w-full border rounded px-3 py-1" placeholder="Tiến độ (%)" type="number" value={editData.progress || 0} onChange={(e) => setEditData({ ...editData, progress: parseInt(e.target.value) || 0 })} />
-              <textarea className="w-full border rounded px-3 py-1" placeholder="Ghi chú" value={editData.note || ""} onChange={(e) => setEditData({ ...editData, note: e.target.value })} />
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <button className="bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded" onClick={() => setIsModalOpen(false)}>Hủy</button>
-              <button className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded" onClick={saveEdit}>Lưu</button>
-            </div>
-          </div>
-        </div>
-      )}
+				<div className="fixed inset-0 bg-gray-5000 bg-opacity-40 flex justify-center items-center z-50 backdrop-blur-sm">
+					<div className="bg-white rounded-xl p-6 w-96 shadow-lg relative">
+						<button className="absolute top-3 right-3 text-gray-500 hover:text-gray-700" onClick={() => setIsModalOpen(false)}>✖</button>
+						<h2 className="text-xl font-bold text-green-700 mb-4">Cập nhật cây trồng</h2>
+						<div className="space-y-3">
+							<input className="w-full border rounded px-3 py-1" placeholder="Tên cây" value={editData.name || ""} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+							<input className="w-full border rounded px-3 py-1" placeholder="Tên khoa học" value={editData.scientificName || ""} onChange={(e) => setEditData({ ...editData, scientificName: e.target.value })} />
+							<input className="w-full border rounded px-3 py-1" type="date" value={editData.startDate || ""} onChange={(e) => setEditData({ ...editData, startDate: e.target.value })}/>
+							<input className="w-full border rounded px-3 py-1" type="date" value={editData.expectedHarvest || ""} onChange={(e) => setEditData({ ...editData, expectedHarvest: e.target.value })}/>
+							<input className="w-full border rounded px-3 py-1" placeholder="Trạng thái" value={editData.status || ""} onChange={(e) => setEditData({ ...editData, status: e.target.value })} />
+							<input className="w-full border rounded px-3 py-1" placeholder="Giai đoạn phát triển" value={editData.growthStage || ""} onChange={(e) => setEditData({ ...editData, growthStage: e.target.value })} />
+							<input className="w-full border rounded px-3 py-1" placeholder="Tiến độ (%)" type="number" value={editData.progress || 0} onChange={(e) => setEditData({ ...editData, progress: parseInt(e.target.value) || 0 })} />
+							<textarea className="w-full border rounded px-3 py-1" placeholder="Ghi chú" value={editData.note || ""} onChange={(e) => setEditData({ ...editData, note: e.target.value })} />
+						</div>
+						<div className="flex justify-end gap-2 mt-4">
+							<button className="bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded" onClick={() => setIsModalOpen(false)}>Hủy</button>
+							<button className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded" onClick={saveEdit}>Lưu</button>
+						</div>
+					</div>
+				</div>
+			)}
+
     </div>
   );
 }
