@@ -11,7 +11,7 @@ export default function NavBar() {
   const navItems = [
     { href: "/explore", label: "Bản đồ" },
     { href: "/plantAI", label: "PlantAI" },
-    { href: "/thong-ke", label: "Thống kê" },
+    { href: "/stats", label: "Thống kê" },
     { href: "/weather", label: "Dự báo thời tiết" },
     { href: "/harvest", label: "Quản lý mùa vụ" },
     { href: "/plantDiseases", label: "Dự đoán bệnh" },

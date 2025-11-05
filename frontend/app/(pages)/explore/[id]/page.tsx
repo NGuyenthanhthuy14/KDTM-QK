@@ -25,13 +25,14 @@ interface Farm {
 }
 
 export default function ExploreID({ params }: { params: Promise<{ id: string }> }) {
-  const router = useRouter();
   const { id } = use(params);
+  const router = useRouter();
 
   const [farm, setFarm] = useState<Farm | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [weather, setWeather] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [aiSuggestion, setAiSuggestion] = useState("Đang phân tích điều kiện...");
 
   // 📦 Lấy thông tin nông trại theo ID
   useEffect(() => {
@@ -67,20 +68,43 @@ export default function ExploreID({ params }: { params: Promise<{ id: string }> 
     fetchWeather();
   }, [farm]);
 
-  // 🌿 Sinh độ ẩm đất giả lập
-  const soilHumidity = weather ? Math.min(100, Math.max(20, weather.main?.humidity - 10 + Math.random() * 15)) : null;
+  // 🌿 Gọi AI n8n để sinh gợi ý chăm sóc cây
+  useEffect(() => {
+  const fetchAISuggestion = async () => {
+    if (!weather || !farm) return;
+    try {
+      const response = await fetch("https://thuyxinh.app.n8n.cloud/webhook/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          farmName: farm.name,
+          location: farm.location,
+          temperature: weather.main?.temp,
+          humidity: weather.main?.humidity,
+          windSpeed: weather.wind?.speed,
+          condition: weather.weather?.[0]?.description,
+        }),
+      });
 
-  // 🌾 Gợi ý chăm sóc cây trồng
-  const careSuggestion = () => {
-    if (!weather) return "Chưa có dữ liệu";
-    const temp = weather.main.temp;
-    const hum = weather.main.humidity;
+      const data = await response.json();
+      console.log(data);
 
-    if (temp > 35) return "🌞 Nhiệt độ cao! Hãy tưới thêm nước và che nắng cho cây.";
-    if (temp < 20) return "❄️ Trời lạnh, nên hạn chế tưới nhiều và giữ ấm cho rễ cây.";
-    if (hum < 40) return "💧 Độ ẩm thấp, cần tưới thêm để giữ ẩm cho đất.";
-    return "🌿 Thời tiết lý tưởng! Cây trồng đang phát triển tốt.";
+      if (data && data.output) {
+        setAiSuggestion(data.output); // ✅ Sửa ở đây
+      } else {
+        setAiSuggestion("Không nhận được phản hồi hợp lệ từ AI.");
+      }
+    } catch (error) {
+      console.error("Lỗi gọi AI:", error);
+      setAiSuggestion("Không thể kết nối tới AI tư vấn.");
+    }
   };
+
+  fetchAISuggestion();
+}, [weather, farm]);
+
+
+  console.log (aiSuggestion)
 
   // 🌀 Hiển thị khi tải
   if (loading || !farm) {
@@ -154,7 +178,7 @@ export default function ExploreID({ params }: { params: Promise<{ id: string }> 
           </motion.div>
         )}
 
-        {/* 🌱 Thông tin phụ */}
+        {/* 🤖 Gợi ý chăm sóc cây trồng */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -164,7 +188,7 @@ export default function ExploreID({ params }: { params: Promise<{ id: string }> 
           <p className="text-lg font-semibold text-green-800 flex justify-center items-center gap-2">
             <Sprout size={22} className="text-green-600" /> Gợi ý chăm sóc:
           </p>
-          <p className="mt-2 text-green-700">{careSuggestion()}</p>
+          <p className="mt-2 text-green-700 whitespace-pre-line">{aiSuggestion}</p>
         </motion.div>
       </motion.div>
     </div>
