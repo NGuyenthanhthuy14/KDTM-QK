@@ -4,7 +4,8 @@ const { Schema } = mongoose;
 const Crop = mongoose.model('crop', {
 	name: String,
 	scientificName: String,
-	startDate: Date
+	startDate: Date,
+	expectedHarvest: Date
 });
 
 module.exports = Crop;
