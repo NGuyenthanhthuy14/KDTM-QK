@@ -1,26 +1,37 @@
-const express = require('express')
-const path = require ('path')
-require('dotenv').config()
-const mongoose = require ('mongoose');
+const express = require('express');
+require('dotenv').config();
+const mongoose = require('mongoose');
+const agricultureRoutes = require('./routers/agriculture.routes');
+const cropRoutes = require('./routers/crop.routes');
+const cors = require('cors'); // 🟢 thêm dòng này
+
+const app = express();
+const port = process.env.PORT || 3003;
+
+// 🟢 Bật CORS
+app.use(cors({
+  origin: 'http://localhost:3000', // Cho phép frontend React
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
+// Kết nối MongoDB
 mongoose.connect(process.env.DATABASE)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
+app.use(express.json());
+
+// Routes
+app.use('/agriculture', agricultureRoutes);
+app.use('/crop', cropRoutes);
 
 
-const Tree = require ("./models/tree.model")
-
-const app = express()
-const port = 3000
-
+// Test server
 app.get('/', (req, res) => {
-  res.send('✅ Server is running!');
+  res.send('Server is running!');
 });
 
-app.get('/tree', async(req, res) => {
-  const treeList = await Tree.find({})
-
-	console.log(treeList)
-})
-
 app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
-})
-
+  console.log(`Server running on port ${port}`);
+});
